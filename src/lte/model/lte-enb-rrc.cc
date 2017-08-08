@@ -20,6 +20,8 @@
  *          Manuel Requena <manuel.requena@cttc.es>
  * Modified by:  Danilo Abrignani <danilo.abrignani@unibo.it> (Carrier Aggregation - GSoC 2015),
  *               Biljana Bojovic <biljana.bojovic@cttc.es> (Carrier Aggregation)
+ *               Samuele Foni <samuele.foni@stud.unifi.it> (NB-IOT)
+ *
  */
 
 #include "lte-enb-rrc.h"
@@ -43,7 +45,9 @@
 #include <ns3/lte-rlc-am.h>
 #include <ns3/lte-pdcp.h>
 
-
+#include <ns3/lte-enb-cphy-sap.h>
+#include <ns3/nb-lte-rrc-sap.h>
+#include <ns3/lte-enb-phy.h>
 
 
 namespace ns3 {
@@ -895,7 +899,7 @@ UeManager::RecvRrcConnectionRequest (LteRrcSap::RrcConnectionRequest msg)
                 m_rrc->m_connectionRejectedTimeoutDuration,
                 &LteEnbRrc::ConnectionRejectedTimeout, m_rrc, m_rnti);
             SwitchToState (CONNECTION_REJECTED);
-          }
+          }//#include "lte-enb-cphy-sap.h"
       }
       break;
 
@@ -1729,6 +1733,16 @@ LteEnbRrc::GetTypeId (void)
   return tid;
 }
 
+/*
+ * todo
+ * Method uses to enable the NB-IoT management mode on the eNB RRC.
+ */
+void
+LteEnbRrc::EnableNbIotEnbManager ()
+{
+  m_nbIotActiveMode = true;
+}
+
 void
 LteEnbRrc::SetEpcX2SapProvider (EpcX2SapProvider * s)
 {
@@ -2061,35 +2075,55 @@ LteEnbRrc::ConfigureCell (std::map<uint8_t, Ptr<ComponentCarrierEnb>> ccPhyConf)
   m_ueMeasConfig.haveSmeasure = false;
   m_ueMeasConfig.haveSpeedStatePars = false;
 
-  m_sib1.clear ();
-  m_sib1.reserve (ccPhyConf.size ());
-  for (const auto &it: ccPhyConf)
+  if(m_nbIotActiveMode)
     {
-      // Enabling MIB transmission
-      LteRrcSap::MasterInformationBlock mib;
-      mib.dlBandwidth = it.second->GetDlBandwidth ();
-      mib.systemFrameNumber = 0;
-      m_cphySapProvider.at (it.first)->SetMasterInformationBlock (mib);
+      m_sib1Nb.clear ();
+      m_sib1Nb.reserve (ccPhyConf.size ());
+      for (const auto &it: ccPhyConf)
+        {
+          // Enabling MIB-NB transmission
+          NbLteRrcSap::MasterInformationBlockNb mibNb;
+          m_cphySapProvider.at (it.first)->SetMasterInformationBlockNb (mibNb);
 
-      // Enabling SIB1 transmission with default values
-      LteRrcSap::SystemInformationBlockType1 sib1;
-      sib1.cellAccessRelatedInfo.cellIdentity = it.second->GetCellId ();
-      sib1.cellAccessRelatedInfo.csgIndication = false;
-      sib1.cellAccessRelatedInfo.csgIdentity = 0;
-      sib1.cellAccessRelatedInfo.plmnIdentityInfo.plmnIdentity = 0; // not used
-      sib1.cellSelectionInfo.qQualMin = -34; // not used, set as minimum value
-      sib1.cellSelectionInfo.qRxLevMin = m_qRxLevMin; // set as minimum value
-      m_sib1.push_back (sib1);
-      m_cphySapProvider.at (it.first)->SetSystemInformationBlockType1 (sib1);
+          // Enabling SIB1_NB transmission with default values
+          NbLteRrcSap::SystemInformationBlockType1Nb sib1Nb;
+          sib1Nb.cellAccessRelatedInfo.cellIdentity = it.second->GetCellId ();
+          // CSG informations are not required according to the NB-IoT standard
+          m_sib1Nb.push_back (sib1Nb);
+          m_cphySapProvider.at (it.first)->SetSystemInformationBlockType1Nb (sib1Nb);
+        }
     }
-  /*
-   * Enabling transmission of other SIB. The first time System Information is
-   * transmitted is arbitrarily assumed to be at +0.016s, and then it will be
-   * regularly transmitted every 80 ms by default (set the
-   * SystemInformationPeriodicity attribute to configure this).
-   */
-  Simulator::Schedule (MilliSeconds (16), &LteEnbRrc::SendSystemInformation, this);
+  else
+    {
+      m_sib1.clear ();
+      m_sib1.reserve (ccPhyConf.size ());
+      for (const auto &it: ccPhyConf)
+        {
+          // Enabling MIB transmission
+          LteRrcSap::MasterInformationBlock mib;
+          mib.dlBandwidth = it.second->GetDlBandwidth ();
+          mib.systemFrameNumber = 0;
+          m_cphySapProvider.at (it.first)->SetMasterInformationBlock (mib);
 
+          // Enabling SIB1 transmission with default values
+          LteRrcSap::SystemInformationBlockType1 sib1;
+          sib1.cellAccessRelatedInfo.cellIdentity = it.second->GetCellId ();
+          sib1.cellAccessRelatedInfo.csgIndication = false;
+          sib1.cellAccessRelatedInfo.csgIdentity = 0;
+          sib1.cellAccessRelatedInfo.plmnIdentityInfo.plmnIdentity = 0; // not used
+          sib1.cellSelectionInfo.qQualMin = -34; // not used, set as minimum value
+          sib1.cellSelectionInfo.qRxLevMin = m_qRxLevMin; // set as minimum value
+          m_sib1.push_back (sib1);
+          m_cphySapProvider.at (it.first)->SetSystemInformationBlockType1 (sib1);
+        }
+      /*
+       * Enabling transmission of other SIB. The first time System Information is
+       * transmitted is arbitrarily assumed to be at +0.016s, and then it will be
+       * regularly transmitted every 80 ms by default (set the
+       * SystemInformationPeriodicity attribute to configure this).
+       */
+      Simulator::Schedule (MilliSeconds (16), &LteEnbRrc::SendSystemInformation, this);
+    }
   m_configured = true;
 
 }

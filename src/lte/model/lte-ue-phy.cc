@@ -18,6 +18,7 @@
  * Author: Giuseppe Piro  <g.piro@poliba.it>
  *         Marco Miozzo <marco.miozzo@cttc.es>
  *         Nicola Baldo <nbaldo@cttc.es>
+ * Modified by: Samuele Foni <samuele.foni@stud.unifi.it> (NB-IOT)
  */
 
 #include <ns3/object-factory.h>
@@ -28,6 +29,7 @@
 #include <ns3/simulator.h>
 #include <ns3/double.h>
 #include "lte-ue-phy.h"
+#include "lte-ue-cphy-sap.h"
 #include "lte-enb-phy.h"
 #include "lte-net-device.h"
 #include "lte-ue-net-device.h"
@@ -1006,6 +1008,21 @@ LteUePhy::ReceiveLteControlMessageList (std::list<Ptr<LteControlMessage> > msgLi
           NS_ASSERT (m_cellId > 0);
           Ptr<Sib1LteControlMessage> msg2 = DynamicCast<Sib1LteControlMessage> (msg);
           m_ueCphySapUser->RecvSystemInformationBlockType1 (m_cellId, msg2->GetSib1 ());
+        }
+      else if (msg->GetMessageType () == LteControlMessage::MIB_NB) // Needed to manage NB-IoT devices. 3GPP Release 13.
+	      {
+          NS_LOG_INFO ("received MIB_NB");
+          NS_ASSERT (m_cellId > 0);
+          Ptr<MibNbLteControlMessage> msg2 = DynamicCast<MibNbLteControlMessage> (msg);
+          m_ueCphySapUser-> RecvMasterInformationBlockNb (m_cellId, msg2->GetMibNb ());
+
+	      }
+      else if (msg->GetMessageType () == LteControlMessage::SIB1_NB) // Needed to manage NB-IoT devices. 3GPP Release 13.
+        {
+          NS_LOG_INFO ("received SIB1_NB");
+          NS_ASSERT (m_cellId > 0);
+          Ptr<Sib1NbLteControlMessage> msg2 = DynamicCast<Sib1NbLteControlMessage> (msg);
+          m_ueCphySapUser-> RecvSystemInformationBlockType1Nb (m_cellId, msg2->GetSib1Nb ());
         }
       else
         {

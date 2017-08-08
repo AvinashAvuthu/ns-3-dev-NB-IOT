@@ -21,6 +21,7 @@
  * Modified by:
  *          Danilo Abrignani <danilo.abrignani@unibo.it> (Carrier Aggregation - GSoC 2015)
  *          Biljana Bojovic <biljana.bojovic@cttc.es> (Carrier Aggregation)
+ *          Samuele Foni <samuele.foni@stud.unifi.it> (NB-IOT)
  */
 
 #ifndef LTE_ENB_RRC_H
@@ -53,6 +54,7 @@
 
 #define MIN_NO_CC 1
 #define MAX_NO_CC 5 // this is the maximum number of carrier components allowed by 3GPP up to R13
+
 
 namespace ns3 {
 
@@ -618,6 +620,13 @@ public:
    * \return the object TypeId
    */
   static TypeId GetTypeId (void);
+
+  /*
+   * todo
+   * Method uses to enable the NB-IoT management mode on the eNB.
+   */
+  void EnableNbIotEnbManager ();
+
 
   /**
    * Set the X2 SAP this RRC should interact with
@@ -1428,6 +1437,16 @@ private:
   /// The System Information Block Type 1 that is currently broadcasted over BCH.
   std::vector<LteRrcSap::SystemInformationBlockType1> m_sib1;
 
+  /*
+   * todo
+   * The System Information Block Type 1 Narrow Band that is currently shared over the NPDSCH and
+   * it is not broadcasted.
+   *
+   * ATTENTION: The NPDSCH channel is not yet implemented, so now the SIB1-NB message is sent over
+   * the legacy BCH. In future, this configuration must change.
+   */
+  std::vector<NbLteRrcSap::SystemInformationBlockType1Nb> m_sib1Nb;
+
   /**
    * The `UeMap` attribute. List of UeManager by C-RNTI.
    */
@@ -1580,6 +1599,12 @@ private:
   bool m_carriersConfigured; ///< are carriers configured
 
   std::map<uint8_t, Ptr<ComponentCarrierEnb>> m_componentCarrierPhyConf; ///< component carrier phy configuration
+
+  /*
+   * todo
+   * Attribute used by the EnableNbIotEnbManager method to store the NB-IoT management mode on the eNB.
+   */
+  bool m_nbIotActiveMode = false;
 
 }; // end of `class LteEnbRrc`
 

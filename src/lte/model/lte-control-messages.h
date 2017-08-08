@@ -17,6 +17,7 @@
  *
  * Author: Giuseppe Piro  <g.piro@poliba.it>
  * Author: Marco Miozzo <marco.miozzo@cttc.es>
+ * Modified by: Samuele Foni <samuele.foni@stud.unifi.it> (NB-IOT)
  */
 
 #ifndef LTE_CONTROL_MESSAGES_H
@@ -26,6 +27,7 @@
 #include <ns3/simple-ref-count.h>
 #include <ns3/ff-mac-common.h>
 #include <ns3/lte-rrc-sap.h>
+#include <ns3/nb-lte-rrc-sap.h>
 #include <list>
 
 namespace ns3 {
@@ -61,6 +63,8 @@ public:
     RAR, // Random Access Response
     MIB, // Master Information Block
     SIB1, // System Information Block Type 1
+	  MIB_NB, // Master Information Block Narrow Band, to get more informations about that refers to 36.300 sec. 7.4 Release 13
+	  SIB1_NB // System Information Block Narrow Band, to get more informations about that refers to 36.300 sec. 7.4 Release 13
   };
 
   LteControlMessage (void);
@@ -402,7 +406,93 @@ private:
 
 }; // end of class Sib1LteControlMessage
 
+// ---------------------------------------------------------------------------
+
+/**
+ * \ingroup NB-IoT
+ * \brief Abstract model for broadcasting the Master Information Block Narrow Band (MIB-NB)
+ *        within the NPBCH channel mapped into the BCCH channel.
+ *
+ * MIB-NB is transmitted by eNodeB RRC and received by UE RRC at every radio frame,
+ * i.e., every 640 milliseconds.
+ *
+ * \sa LteEnbRrc::ConfigureCell, LteEnbPhy::StartFrame,
+ *     LteUeRrc::DoRecvMasterInformationBlock
+ */
+class MibNbLteControlMessage : public LteControlMessage
+{
+public:
+  /**
+   * \brief Create a new instance of MIB-NB control message.
+   */
+
+  MibNbLteControlMessage (void);
+
+  /**
+   * \brief Replace the MIB-NB content of this control message.
+   * \param mibNb the desired MIB-NB content
+   */
+
+  void SetMibNb (NbLteRrcSap::MasterInformationBlockNb mibNb);
+
+  /**
+   * \brief Retrieve the MIB content from this control message.
+   * \return the current MIB content that this control message holds
+   */
+
+  NbLteRrcSap::MasterInformationBlockNb GetMibNb () const;
+
+private:
+  NbLteRrcSap::MasterInformationBlockNb m_mibNb;
+
+}; // end of class MibNbLteControlMessage
+
+// ---------------------------------------------------------------------------
+
+
+/**
+ * \ingroup NB-IOT
+ * \brief Abstract model for broadcasting the Master Information Block Narrow Band (SIB1-NB)
+ *        within the NPDSCH channel mapped into PCH and DL-SCH channels.
+ *
+ * SIB1-NB is transmitted by eNodeB RRC and received by UE RRC in subframe #4 of every other frame
+ * in 16 continuous frames, i.e., every 2560 milliseconds.
+ *
+ * \sa
+ */
+class Sib1NbLteControlMessage : public LteControlMessage
+{
+public:
+  /**
+   * \brief Create a new instance of MIB-NB control message.
+   */
+
+  Sib1NbLteControlMessage (void);
+
+  /**
+   * \brief Replace the MIB-NB content of this control message.
+   * \param mibNb the desired MIB-NB content
+   */
+
+  void SetSib1Nb (NbLteRrcSap::SystemInformationBlockType1Nb mibNb);
+
+  /**
+   * \brief Retrieve the MIB content from this control message.
+   * \return the current MIB content that this control message holds
+   */
+
+  NbLteRrcSap::SystemInformationBlockType1Nb GetSib1Nb () const;
+
+private:
+  NbLteRrcSap::SystemInformationBlockType1Nb m_sib1Nb;
+
+}; // end of class Sib1NbLteControlMessage
+
+// ---------------------------------------------------------------------------
+
 
 } // namespace ns3
 
 #endif  // LTE_CONTROL_MESSAGES_H
+
+

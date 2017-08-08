@@ -17,6 +17,7 @@
  *
  * Author: Giuseppe Piro  <g.piro@poliba.it>
  * Author: Marco Miozzo <marco.miozzo@cttc.es>
+ *  Modified by: Samuele Foni <samuele.foni@stud.unifi.it> (NB-IOT)
  */
 
 #ifndef ENB_LTE_PHY_H
@@ -28,6 +29,7 @@
 #include <ns3/lte-enb-cphy-sap.h>
 #include <ns3/lte-phy.h>
 #include <ns3/lte-harq-phy.h>
+#include <ns3/nb-lte-rrc-sap.h>
 
 #include <map>
 #include <set>
@@ -75,6 +77,16 @@ public:
   virtual void DoInitialize (void);
   virtual void DoDispose (void);
 
+
+  /*
+   * \todo
+   * This method enable the NB-IoT mode instead of legacy LTE.
+   * It must be called after the initialization of the LteEnbPhy object,
+   * if you plan to use NB-IoT module.
+   * This is not a permanent solution. To get more information see the
+   * m_EnableNbIot declaration.
+   */
+  void EnableNbIotMode();
 
   /**
   * \brief Get the PHY SAP provider
@@ -381,6 +393,8 @@ private:
    * \param sib1 LteRrcSap::SystemInformationBlockType1
    */
   void DoSetSystemInformationBlockType1 (LteRrcSap::SystemInformationBlockType1 sib1);
+  void DoSetMasterInformationBlockNb (NbLteRrcSap::MasterInformationBlockNb mibNb); // Used by NB-IoT standard. 3GPP Release 13.
+  void DoSetSystemInformationBlockType1Nb (NbLteRrcSap::SystemInformationBlockType1Nb sib1Nb); // Used by NB-IoT standard. 3GPP Release 13.
 
   // LteEnbPhySapProvider forwarded methods
   void DoSendMacPdu (Ptr<Packet> p);
@@ -473,12 +487,31 @@ private:
    * The message content is specified by the upper layer through the RRC SAP.
    */
   LteRrcSap::MasterInformationBlock m_mib;
+
   /**
    * The System Information Block Type 1 message to be broadcasted. SIB1 is
    * broadcasted every 6th subframe of every odd-numbered radio frame.
    * The message content is specified by the upper layer through the RRC SAP.
    */
   LteRrcSap::SystemInformationBlockType1 m_sib1;
+
+  /**
+   * The Master Information Block Narrow Band message to be broadcasted every 64 frames,
+   * with a period of 640 ms.
+   * The content of the MIB-NB is arranged in 8 subframes and it is repeated 8 times,
+   * before to change the current value.
+   * To get more information see 36.331 sec. 5.2.1.2a.
+   * The message content is specified by the upper layer through the RRC SAP.
+   */
+  NbLteRrcSap::MasterInformationBlockNb m_mibNb;
+
+  /**
+   * The System Information Block Type 1 Narrow Band message to be broadcasted every 256 frame,
+   * with a period of 2560 ms.
+   * The SIB1−NB is transmitted in subframe #4 o f every other frame in max 16 continuous frames.
+   * The message content is specified by the upper layer through the RRC SAP.
+   */
+  NbLteRrcSap::SystemInformationBlockType1Nb m_sib1Nb;
 
   Ptr<LteHarqPhy> m_harqPhyModule; ///< HARQ Phy module
 
@@ -516,6 +549,55 @@ private:
    * PhyTransmissionStatParameters.
    */
   TracedCallback<PhyTransmissionStatParameters> m_dlPhyTransmission;
+
+  //----------------------------------------------------------------------------------------------------------------
+
+  /*
+   * \todo
+   *
+   * NB-IoT variable
+   *
+   * NB-IoT uses different logical channels from legacy LTE.
+   * While the implementation of these channels is not completed,
+   * we will use a boolean value to distinguish an NB-IoT Radio Frame
+   * from a legacy LTE one.
+   * If the user plans to make a NB-IoT session, he has to invoke the
+   * LteEnbPhy::enableNbIotMode() after the instantiation of an
+   * LteEnbPhy object.
+   */
+  bool m_EnabledNbIot = false;
+
+  /*
+   * NB-IoT variable
+   *
+   * MIB-NB must be transmitted in parts. So we need a counter to control
+   * the exact part of the sequence.
+   */
+  uint8_t m_mibNbPartCounter;
+
+  /*
+   * NB-IoT variable
+   *
+   * MIB-NB need to initialize the schedulingInfoSib1 value in a pseudo random
+   * way, but it must be repeated exactly for 8 times. So we use this variable
+   * to control the sequence.
+   */
+  uint8_t m_schedulingInfoSib1NbGenerator;
+
+  /*
+   * NB-IoT variable
+   *
+   * SIB1-NB has a variable number of repetitions. So we need a member to
+   * trace the repetitions.
+   */
+  uint8_t m_sib1NbRepetitions;
+
+  /*
+   * NB-IoT variable
+   *
+   * A new SIB1-NB must be generated every 256 radio frames.
+   */
+  bool m_sib1NbPeriod = false;
 
 }; // end of `class LteEnbPhy`
 

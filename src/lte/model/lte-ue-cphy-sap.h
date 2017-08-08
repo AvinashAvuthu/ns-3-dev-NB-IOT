@@ -17,6 +17,7 @@
  *
  * Author: Nicola Baldo <nbaldo@cttc.es>,
  *         Marco Miozzo <mmiozzo@cttc.es>
+ *  Modified by: Samuele Foni <samuele.foni@stud.unifi.it> (NB-IOT)
  */
 
 #ifndef LTE_UE_CPHY_SAP_H
@@ -26,6 +27,7 @@
 #include <ns3/ptr.h>
 
 #include <ns3/lte-rrc-sap.h>
+#include <ns3/nb-lte-rrc-sap.h>
 
 namespace ns3 {
 
@@ -194,6 +196,16 @@ public:
                                            LteRrcSap::MasterInformationBlock mib) = 0;
 
   /**
+     * \brief Relay an MIB-NB message from the PHY entity to the RRC layer.
+     * \param cellId the ID of the eNodeB where the message originates from
+     * \param mibNb the Master Information Block Narrow Band message
+     *
+     * This function is typically called after PHY receives an MIB-NB message.
+     */
+    virtual void RecvMasterInformationBlockNb (uint16_t cellId,
+                                              NbLteRrcSap::MasterInformationBlockNb mibNb) = 0;
+
+  /**
    * \brief Relay an SIB1 message from the PHY entity to the RRC layer.
    * \param cellId the ID of the eNodeB where the message originates from
    * \param sib1 the System Information Block Type 1 message
@@ -205,6 +217,16 @@ public:
                                                 LteRrcSap::SystemInformationBlockType1 sib1) = 0;
 
   /**
+       * \brief Relay an SIB1-NB message from the PHY entity to the RRC layer.
+       * \param cellId the ID of the eNodeB where the message originates from
+       * \param mibNb the System Information Block Type 1 Narrow Band message
+       *
+       * This function is typically called after PHY receives an SIB1-NB message.
+       */
+      virtual void RecvSystemInformationBlockType1Nb (uint16_t cellId,
+                                                NbLteRrcSap::SystemInformationBlockType1Nb sib1Nb) = 0;
+
+  /**
    * \brief Send a report of RSRP and RSRQ values perceived from PSS by the PHY
    *        entity (after applying layer-1 filtering) to the RRC layer.
    * \param params the structure containing a vector of cellId, RSRP and RSRQ
@@ -212,6 +234,9 @@ public:
   virtual void ReportUeMeasurements (UeMeasurementsParameters params) = 0;
 
 };
+
+
+
 
 
 
@@ -362,6 +387,11 @@ public:
                                                 LteRrcSap::SystemInformationBlockType1 sib1);
   virtual void ReportUeMeasurements (LteUeCphySapUser::UeMeasurementsParameters params);
 
+  virtual void RecvMasterInformationBlockNb (uint16_t cellId,
+                                             NbLteRrcSap::MasterInformationBlockNb mibNb); // Used by NB-IoT. 3GPP Release 13.
+  virtual void RecvSystemInformationBlockType1Nb (uint16_t cellId,
+                                                  NbLteRrcSap::SystemInformationBlockType1Nb sib1Nb); // Used by NB-IoT. 3GPP Release 13.
+
 private:
   MemberLteUeCphySapUser ();
   C* m_owner; ///< the owner class
@@ -400,6 +430,23 @@ MemberLteUeCphySapUser<C>::ReportUeMeasurements (LteUeCphySapUser::UeMeasurement
 {
   m_owner->DoReportUeMeasurements (params);
 }
+
+template <class C>
+void
+MemberLteUeCphySapUser<C>::RecvMasterInformationBlockNb (uint16_t cellId,
+                                                       NbLteRrcSap::MasterInformationBlockNb mibNb) // Used by NB-IoT. 3GPP Release 13.
+{
+  m_owner->DoRecvMasterInformationBlockNb (cellId, mibNb);
+}
+
+template <class C>
+void
+MemberLteUeCphySapUser<C>::RecvSystemInformationBlockType1Nb (uint16_t cellId,
+                                                            NbLteRrcSap::SystemInformationBlockType1Nb sib1Nb)
+{
+  m_owner->DoRecvSystemInformationBlockType1Nb (cellId, sib1Nb);
+}
+
 
 
 } // namespace ns3

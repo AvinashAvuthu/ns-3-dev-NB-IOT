@@ -17,6 +17,8 @@
  *
  * Author: Giuseppe Piro  <g.piro@poliba.it>
  *         Marco Miozzo <marco.miozzo@cttc.es>
+ * Modified by: Samuele Foni <samuele.foni@stud.unifi.it> (NB-IOT)
+ *
  */
 
 #include "lte-control-messages.h"
@@ -308,6 +310,50 @@ DlHarqFeedbackLteControlMessage::GetDlHarqFeedback (void)
   return m_dlInfoListElement;
 }
 
+
+// ---------------------------------------------------------------------------
+// Added to serve NB-IoT standard explained in the 3GPP Release 13
+
+
+MibNbLteControlMessage::MibNbLteControlMessage (void)
+{
+	SetMessageType (LteControlMessage::MIB_NB);
+}
+
+void
+MibNbLteControlMessage::SetMibNb (NbLteRrcSap::MasterInformationBlockNb  mibNb)
+{
+  m_mibNb = mibNb;
+}
+
+NbLteRrcSap::MasterInformationBlockNb
+MibNbLteControlMessage::GetMibNb () const
+{
+  return m_mibNb;
+}
+
+
+//---------------------------------------------------------------------------
+// Added to serve NB-IoT standard explained in the 3GPP Release 13
+
+Sib1NbLteControlMessage::Sib1NbLteControlMessage(void)
+{
+  SetMessageType (LteControlMessage::SIB1_NB);
+}
+
+void
+Sib1NbLteControlMessage::SetSib1Nb(NbLteRrcSap::SystemInformationBlockType1Nb sib1Nb)
+{
+  m_sib1Nb=sib1Nb;
+}
+
+NbLteRrcSap::SystemInformationBlockType1Nb
+Sib1NbLteControlMessage::GetSib1Nb()const
+{
+  return m_sib1Nb;
+}
+
+//---------------------------------------------------------------------------
 
 } // namespace ns3
 

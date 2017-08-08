@@ -20,6 +20,7 @@
  * Modified by:
  *          Danilo Abrignani <danilo.abrignani@unibo.it> (Carrier Aggregation - GSoC 2015)
  *          Biljana Bojovic <biljana.bojovic@cttc.es> (Carrier Aggregation)
+ *          Samuele Foni <samuele.foni@stud.unifi.it> (NB-IOT)
  */
 
 #ifndef LTE_UE_RRC_H
@@ -431,6 +432,13 @@ private:
    * \param params LteUeCphySapUser::UeMeasurementsParameters
    */
   void DoReportUeMeasurements (LteUeCphySapUser::UeMeasurementsParameters params);
+
+  // NB-IoT methods
+  void DoRecvMasterInformationBlockNb (uint16_t cellId,
+                                     NbLteRrcSap::MasterInformationBlockNb msg); // Used by NB-IoT. 3GPP Release 13.
+  void DoRecvSystemInformationBlockType1Nb (uint16_t cellId,
+                                           NbLteRrcSap::SystemInformationBlockType1Nb msg); // Used by NB-IoT. 3GPP Release 13.
+  void EnableNbIotUeManager(); // Used to set true the m_nbIotActiveMode parameter
 
   // RRC SAP methods
 
@@ -852,6 +860,7 @@ private:
   /// True if SIB2 was received for the current cell.
   bool m_hasReceivedSib2;
 
+
   /// Stored content of the last SIB1 received.
   LteRrcSap::SystemInformationBlockType1 m_lastSib1;
 
@@ -860,6 +869,55 @@ private:
 
   /// List of CSG ID which this UE entity has access to.
   uint32_t m_csgWhiteList;
+
+
+
+  /////////////////////////////////
+  // NB-IoT RRC attributes (begin)
+  /////////////////////////////////
+
+
+  /// True if MIB-NB was received for the current cell.
+  bool m_hasReceivedMibNb;
+  /// True if SIB1-NB was received for the current cell.
+  bool m_hasReceivedSib1Nb;
+
+  /// Stored content of the last SIB1-NB received.
+  NbLteRrcSap::SystemInformationBlockType1Nb m_lastSib1Nb;
+
+  /*
+   * todo
+   * This attribute must be enabled to avoid the call to the SwitchToState(CONNECTED_HANDOVER) method.
+   * That is needed because NB-IoT does not support handover.
+   *
+   * EnableNbIotManager is the method used to change the parameter value.
+   *
+   * In future this mechanism will change.
+   */
+  bool m_nbIotActiveMode = false;
+
+  /*
+   * This is the number of the NPDSCH repetitions of the SIB1-NB message. This attribute
+   * is sent over the MIB-NB message and it is related to the schedulingInfoSIB1 value.
+   * To get more information about this refer to the document 36.213, Table 16.4.1.3-3.
+   *
+   * todo
+   * The NPDSCH is not yet implemented, so remember to upgrade this code when it will be
+   * ready to use.
+   */
+  uint16_t m_numberOfNpdschRepetitions;
+
+  /*
+   * TBS of the SIB1-NB message, this value is derived from the content of the MIB-NB
+   * message and depends on the content of the schedulingInfoSIB1. To get more
+   * information about this refer to the document 36.213, Table 16.4.1.5.2-1.
+   */
+  uint32_t m_transportBlockSize;
+
+  /////////////////////////////////
+  // NB-IoT RRC attributes (end)
+  /////////////////////////////////
+
 
 
   // INTERNAL DATA STRUCTURE RELATED TO UE MEASUREMENTS

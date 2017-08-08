@@ -20,6 +20,8 @@
  * Modified by:
  *          Danilo Abrignani <danilo.abrignani@unibo.it> (Carrier Aggregation - GSoC 2015)
  *          Biljana Bojovic <biljana.bojovic@cttc.es> (Carrier Aggregation)
+ *          Samuele Foni <samuele.foni@stud.unifi.it> (NB-IOT)
+ *
  */
 
 #include "lte-ue-rrc.h"
@@ -839,6 +841,277 @@ LteUeRrc::DoRecvSystemInformationBlockType1 (uint16_t cellId,
     }
 }
 
+
+/*
+ * todo
+ * Method uses to enable the NB-IoT management mode on the UE RRC.
+ */
+void
+LteUeRrc::EnableNbIotUeManager()
+{
+  m_nbIotActiveMode = true;
+}
+
+/*
+ * todo
+ * NB-IoT Method DoRecvMasterInformationBlockNb.
+ *
+ * This method in future will be used by an another class. Cause we need to operate
+ * with a Cat NB1 device that has a different management of the RRC protocol.
+ * Now, to test the signaling traffic module, we are integrating this method to the
+ * legacy LTE RRC layer, UE side.
+ * Notice that the eNB RRC layer needs to manage both UE category, so it will be
+ * one class only.
+ *
+ * If the NB-IoT module is enabled (this job is made by the boolean variable
+ * m_EnabledNbIot in the LteEnbPhy class) this method is automatically set as
+ * default and it is not possible that the DoRecvMasterInformationBlock method
+ * is invoked in its place.
+ */
+void
+LteUeRrc::DoRecvMasterInformationBlockNb (uint16_t cellId,
+                                        NbLteRrcSap::MasterInformationBlockNb msg)	// Needed to manage NB-IoT connections. 3GPP Release 13.
+{
+  switch(msg.schedulingInfoSib1)
+  {
+    case 0:
+    case 3:
+    case 6:
+    case 9:
+      m_numberOfNpdschRepetitions = 4;
+      break;
+
+    case 1:
+    case 4:
+    case 7:
+    case 10:
+      m_numberOfNpdschRepetitions = 8;
+      break;
+
+    default:
+      m_numberOfNpdschRepetitions = 16;
+      break;
+  }
+
+  /*
+   * This is the transport block size of the SIB1-NB message. This value must be set also in the
+   * schedulingInfoListNb.siTb parameter, inside a SIB1-NB message. To get more information
+   * about this see the declaration of the m_transportBlockSize attribute.
+   */
+  if(msg.schedulingInfoSib1 < 3)
+    {
+      m_transportBlockSize = 280;
+    }else if(msg.schedulingInfoSib1 < 6)
+    {
+      m_transportBlockSize = 328;
+
+    }else if(msg.schedulingInfoSib1 < 9)
+    {
+      m_transportBlockSize = 440;
+
+    }else
+    {
+      m_transportBlockSize = 680;
+    }
+
+  /*
+   * todo
+   * This is an unused attribute because we used the Legacy LTE structure to make first tests.
+   * So we have to set also the m_hasReceivedMib to reuse the LTE finite state machine. This is
+   * not a problem cause the methods DoRecvMasterInformationBlock and DoRecvMasterInformationBlockNb
+   * are mutually exclusive.
+   */
+  m_hasReceivedMibNb = true;
+  m_hasReceivedMib = true;
+
+
+  /*
+   * m_dlBandwidth attribute represents the downlink bandwidth in RBs. We know that NB-IoT uses one
+   * RB only, so we must set this value to 1. Notice that this value is not sent over the MIB-NB message
+   * cause it is understood.
+   */
+  m_dlBandwidth = 1;
+  m_cphySapProvider.at(0)->SetDlBandwidth (m_dlBandwidth);
+
+  /*
+   * todo
+   * The configuration is finished. Now we can set the legacy m_mibReceivedTrace. In future this
+   * configuration will vary.
+   * Notice that also Cat NB1 devices need to have a tmsi (Temporary Mobile Subscriber Identity),
+   * but it does not have a SIM card, so it can not have a pure imsi identifier. Actually we can
+   * leave the default value to make some tests, but this idea will change.
+   */
+  m_mibReceivedTrace (m_imsi, m_cellId, m_rnti, cellId);
+
+  /*
+   * The state flow will be the same of the legacy LTE, but the manual attachment in NB-IoT is a little
+   * bit different from the LTE one, so we consider the automatic attachment only.
+   */
+  switch (m_state)
+    {
+      case IDLE_WAIT_MIB:
+      case IDLE_WAIT_MIB_SIB1:
+        // automatic attachment from Idle mode cell selection
+        SwitchToState (IDLE_WAIT_SIB1);
+        break;
+
+      default:
+        // do nothing extra
+        break;
+    }
+
+}
+
+
+/*
+ * todo
+ * NB-IoT Method DoRecvSystemInformationBlockType1Nb.
+ *
+ * This method in future will be used by an another class. Cause we need to operate
+ * with a Cat NB1 device that has a different management of the RRC protocol.
+ * Now, to test the signaling traffic module, we are integrating this method to the
+ * legacy LTE RRC layer, UE side.
+ * Notice that the eNB RRC layer needs to manage both UE category, so it will be
+ * one class only.
+ *
+ * If the NB-IoT module is enabled (this job is made by the boolean variable
+ * m_EnabledNbIot in the LteEnbPhy class) this method is automatically set as
+ * default and it is not possible that the DoRecvSystemInformationBlockType1
+ * method is invoked in its place.
+ */
+void
+LteUeRrc::DoRecvSystemInformationBlockType1Nb (uint16_t cellId, NbLteRrcSap::SystemInformationBlockType1Nb msg)
+{
+  NS_LOG_FUNCTION (this);
+  switch (m_state)
+    {
+    case IDLE_WAIT_SIB1:
+      {
+        NS_ASSERT_MSG (cellId == msg.cellAccessRelatedInfo.cellIdentity,
+                       "Cell identity in SIB1-NB does not match with the originating cell");
+        /*
+         * todo
+         * This is an unused attribute because we used the Legacy LTE structure to make first tests.
+         * So we have to set also the m_hasReceivedSib1 to reuse the LTE finite state machine. This is
+         * not a problem cause the methods DoRecvSystemInformationBlockType1 and
+         * DoRecvSystemInformationBlockType1Nb are mutually exclusive.
+         */
+        m_hasReceivedSib1Nb=true;
+        m_hasReceivedSib1 = true;
+
+        /*
+         * We need a coherent structure to stored the last SIB1-NB message received.
+         */
+        m_lastSib1Nb = msg;
+
+        /*
+         * todo
+         * The configuration is finished. Now we can set the legacy m_sib1ReceivedTrace. In future this
+         * configuration will vary.
+         * Notice that also Cat NB1 devices need to have a tmsi (Temporary Mobile Subscriber Identity),
+         * but it does not have a SIM card, so it can not have a pure imsi identifier. Actually we can
+         * leave the default value to make some tests, but this idea will change.
+         */
+        m_sib1ReceivedTrace (m_imsi, m_cellId, m_rnti, cellId);
+
+        /*
+         * We can't use the EvaluateCellForSelection method. We need to override this.
+         */
+        // BEGIN EVALUATE CELL FOR SELECTION
+        NS_ASSERT (m_state == IDLE_WAIT_SIB1);
+        NS_ASSERT (m_hasReceivedMibNb);
+        NS_ASSERT (m_hasReceivedSib1Nb);
+
+        // Cell selection criteria evaluation
+
+        bool isSuitableCell = false;
+        bool isAcceptableCell = false;
+        std::map<uint16_t, MeasValues>::iterator storedMeasIt = m_storedMeasValues.find (m_lastSib1Nb.cellAccessRelatedInfo.cellIdentity);
+        double qRxLevMeas = storedMeasIt->second.rsrp;
+
+        /// Note that we must specify the qRxLevMin for NB-IoT that will be different from legacy LTE.
+        /// We print into the LOG console also the value of the current TBS of a SIB1-NB message.
+        double qRxLevMin = EutranMeasurementMapping::IeValue2ActualQRxLevMin (m_lastSib1Nb.cellSelectionInfo.qRxLevMin);
+        NS_LOG_LOGIC (this << " cell selection to cellId=" << m_lastSib1Nb.cellAccessRelatedInfo.cellIdentity
+                           << " qrxlevmeas=" << qRxLevMeas << " dBm"
+                           << " qrxlevmin=" << qRxLevMin << " dBm"
+                           << " sib1NbTransportBlockSize="<< m_transportBlockSize <<" RB");
+
+        if (qRxLevMeas - qRxLevMin > 0)
+          {
+            isAcceptableCell = true;
+
+            // CSG informations are not present in NB-IoT, so this is enough.
+            isSuitableCell = true;
+          }
+
+        // Cell selection decision
+
+        if (isSuitableCell)
+          {
+            m_cellId = m_lastSib1Nb.cellAccessRelatedInfo.cellIdentity;
+            m_cphySapProvider.at(0)->SynchronizeWithEnb (m_lastSib1Nb.cellAccessRelatedInfo.cellIdentity, m_dlEarfcn);
+            m_cphySapProvider.at(0)->SetDlBandwidth (m_dlBandwidth);
+            m_initialCellSelectionEndOkTrace (m_imsi, m_lastSib1Nb.cellAccessRelatedInfo.cellIdentity);
+            SwitchToState (IDLE_CAMPED_NORMALLY);
+          }
+        else
+          {
+            // ignore the MIB-NB and SIB1-NB received from this cell
+            m_hasReceivedMibNb = false;
+            m_hasReceivedSib1Nb = false;
+            m_hasReceivedMib = false;
+            m_hasReceivedSib1 = false;
+
+            m_initialCellSelectionEndErrorTrace (m_imsi, m_lastSib1Nb.cellAccessRelatedInfo.cellIdentity);
+
+            if (isAcceptableCell)
+              {
+                /*
+                 * The cells inserted into this list will not be considered for
+                 * subsequent cell search attempt.
+                 */
+                m_acceptableCell.insert (m_lastSib1Nb.cellAccessRelatedInfo.cellIdentity);
+              }
+
+            SwitchToState (IDLE_CELL_SEARCH);
+            SynchronizeToStrongestCell (); // retry to a different cell
+          }
+          //END EVALUATE CELL FOR SELECTION
+        }
+      break; /// END CASE IDLE_WAIT_SIB1
+
+    case IDLE_CAMPED_NORMALLY:
+    case IDLE_RANDOM_ACCESS:
+    case IDLE_CONNECTING:
+    case CONNECTED_NORMALLY:
+    case CONNECTED_HANDOVER:
+    case CONNECTED_PHY_PROBLEM:
+    case CONNECTED_REESTABLISHING:
+      {
+          NS_ASSERT_MSG (cellId == msg.cellAccessRelatedInfo.cellIdentity,
+                         "Cell identity in SIB1-NB does not match with the originating cell");
+
+          /*
+           * todo
+           * This is an unused attribute because we used the Legacy LTE structure to make first tests.
+           * So we have to set also the m_hasReceivedSib1 to reuse the LTE finite state machine. This is
+           * not a problem cause the methods DoRecvSystemInformationBlockType1 and
+           * DoRecvSystemInformationBlockType1Nb are mutually exclusive.
+           */
+          m_hasReceivedSib1Nb=true;
+          m_hasReceivedSib1 = true;
+          m_lastSib1Nb = msg;
+          m_sib1ReceivedTrace (m_imsi, m_cellId, m_rnti, cellId);
+        }
+      break;
+
+    default: // e.g. IDLE_START, IDLE_CELL_SEARCH, IDLE_WAIT_MIB, IDLE_WAIT_SIB2, IDLE_WAIT_MIB_SIB1
+      // do nothing
+      break;
+    }
+}
+
 void
 LteUeRrc::DoReportUeMeasurements (LteUeCphySapUser::UeMeasurementsParameters params)
 {
@@ -980,67 +1253,75 @@ LteUeRrc::DoRecvRrcConnectionReconfiguration (LteRrcSap::RrcConnectionReconfigur
   switch (m_state)
     {
     case CONNECTED_NORMALLY:
-      if (msg.haveMobilityControlInfo)
-        {
-          NS_LOG_INFO ("haveMobilityControlInfo == true");
-          SwitchToState (CONNECTED_HANDOVER);
-          const LteRrcSap::MobilityControlInfo& mci = msg.mobilityControlInfo;
-          m_handoverStartTrace (m_imsi, m_cellId, m_rnti, mci.targetPhysCellId);
-          m_cmacSapProvider.at(0)->Reset ();
-          m_cphySapProvider.at(0)->Reset ();
-          m_cellId = mci.targetPhysCellId;
-          NS_ASSERT (mci.haveCarrierFreq);
-          NS_ASSERT (mci.haveCarrierBandwidth);
-          m_cphySapProvider.at(0)->SynchronizeWithEnb (m_cellId, mci.carrierFreq.dlCarrierFreq);
-          m_cphySapProvider.at(0)->SetDlBandwidth ( mci.carrierBandwidth.dlBandwidth);
-          m_cphySapProvider.at(0)->ConfigureUplink (mci.carrierFreq.ulCarrierFreq, mci.carrierBandwidth.ulBandwidth);
-          m_rnti = msg.mobilityControlInfo.newUeIdentity;
-          m_srb0->m_rlc->SetRnti (m_rnti);
-          NS_ASSERT_MSG (mci.haveRachConfigDedicated, "handover is only supported with non-contention-based random access procedure");
-          m_cmacSapProvider.at(0)->StartNonContentionBasedRandomAccessProcedure (m_rnti, mci.rachConfigDedicated.raPreambleIndex, mci.rachConfigDedicated.raPrachMaskIndex);
-          m_cphySapProvider.at(0)->SetRnti (m_rnti);
-          m_lastRrcTransactionIdentifier = msg.rrcTransactionIdentifier;
-          NS_ASSERT (msg.haveRadioResourceConfigDedicated);
 
-          // we re-establish SRB1 by creating a new entity
-          // note that we can't dispose the old entity now, because
-          // it's in the current stack, so we would corrupt the stack
-          // if we did so. Hence we schedule it for later disposal
-          m_srb1Old = m_srb1;
-          Simulator::ScheduleNow (&LteUeRrc::DisposeOldSrb1, this);
-          m_srb1 = 0; // new instance will be be created within ApplyRadioResourceConfigDedicated
 
-          m_drbMap.clear (); // dispose all DRBs
-          ApplyRadioResourceConfigDedicated (msg.radioResourceConfigDedicated);
+          if ((msg.haveMobilityControlInfo)&&(m_nbIotActiveMode==false))
+            {
+              NS_LOG_INFO ("haveMobilityControlInfo == true");
+              SwitchToState (CONNECTED_HANDOVER);
+              const LteRrcSap::MobilityControlInfo& mci = msg.mobilityControlInfo;
+              m_handoverStartTrace (m_imsi, m_cellId, m_rnti, mci.targetPhysCellId);
+              m_cmacSapProvider.at(0)->Reset ();
+              m_cphySapProvider.at(0)->Reset ();
+              m_cellId = mci.targetPhysCellId;
+              NS_ASSERT (mci.haveCarrierFreq);
+              NS_ASSERT (mci.haveCarrierBandwidth);
+              m_cphySapProvider.at(0)->SynchronizeWithEnb (m_cellId, mci.carrierFreq.dlCarrierFreq);
+              m_cphySapProvider.at(0)->SetDlBandwidth ( mci.carrierBandwidth.dlBandwidth);
+              m_cphySapProvider.at(0)->ConfigureUplink (mci.carrierFreq.ulCarrierFreq, mci.carrierBandwidth.ulBandwidth);
+              m_rnti = msg.mobilityControlInfo.newUeIdentity;
+              m_srb0->m_rlc->SetRnti (m_rnti);
+              NS_ASSERT_MSG (mci.haveRachConfigDedicated, "handover is only supported with non-contention-based random access procedure");
+              m_cmacSapProvider.at(0)->StartNonContentionBasedRandomAccessProcedure (m_rnti, mci.rachConfigDedicated.raPreambleIndex, mci.rachConfigDedicated.raPrachMaskIndex);
+              m_cphySapProvider.at(0)->SetRnti (m_rnti);
+              m_lastRrcTransactionIdentifier = msg.rrcTransactionIdentifier;
+              NS_ASSERT (msg.haveRadioResourceConfigDedicated);
 
-          if (msg.haveMeasConfig)
-            {
-              ApplyMeasConfig (msg.measConfig);
-            }
-          // RRC connection reconfiguration completed will be sent
-          // after handover is complete
-        }
-      else
-        {
-          NS_LOG_INFO ("haveMobilityControlInfo == false");
-          if (msg.haveNonCriticalExtension)
-            {
-              ApplyRadioResourceConfigDedicatedSecondaryCarrier (msg.nonCriticalExtension);
-              NS_LOG_FUNCTION ( this << "RNTI " << m_rnti << " Configured for CA" );
-            }
-          if (msg.haveRadioResourceConfigDedicated)
-            {
+              // we re-establish SRB1 by creating a new entity
+              // note that we can't dispose the old entity now, because
+              // it's in the current stack, so we would corrupt the stack
+              // if we did so. Hence we schedule it for later disposal
+              m_srb1Old = m_srb1;
+              Simulator::ScheduleNow (&LteUeRrc::DisposeOldSrb1, this);
+              m_srb1 = 0; // new instance will be be created within ApplyRadioResourceConfigDedicated
+
+              m_drbMap.clear (); // dispose all DRBs
               ApplyRadioResourceConfigDedicated (msg.radioResourceConfigDedicated);
-            } 
-          if (msg.haveMeasConfig)
-            {
-              ApplyMeasConfig (msg.measConfig);
+
+              if (msg.haveMeasConfig)
+                {
+                  ApplyMeasConfig (msg.measConfig);
+                }
+              // RRC connection reconfiguration completed will be sent
+              // after handover is complete
             }
-          LteRrcSap::RrcConnectionReconfigurationCompleted msg2;
-          msg2.rrcTransactionIdentifier = msg.rrcTransactionIdentifier;
-          m_rrcSapUser->SendRrcConnectionReconfigurationCompleted (msg2);
-          m_connectionReconfigurationTrace (m_imsi, m_cellId, m_rnti);
-        }
+          else
+            {
+              if(m_nbIotActiveMode)
+                {
+                  NS_LOG_FUNCTION (this << " NB-IoT mode does not support handover. Provide an RRC reconfiguration.");
+                }
+
+              NS_LOG_INFO ("haveMobilityControlInfo == false");
+              if (msg.haveNonCriticalExtension)
+                {
+                  ApplyRadioResourceConfigDedicatedSecondaryCarrier (msg.nonCriticalExtension);
+                  NS_LOG_FUNCTION ( this << "RNTI " << m_rnti << " Configured for CA" );
+                }
+              if (msg.haveRadioResourceConfigDedicated)
+                {
+                  ApplyRadioResourceConfigDedicated (msg.radioResourceConfigDedicated);
+                }
+              if (msg.haveMeasConfig)
+                {
+                  ApplyMeasConfig (msg.measConfig);
+                }
+              LteRrcSap::RrcConnectionReconfigurationCompleted msg2;
+              msg2.rrcTransactionIdentifier = msg.rrcTransactionIdentifier;
+              m_rrcSapUser->SendRrcConnectionReconfigurationCompleted (msg2);
+              m_connectionReconfigurationTrace (m_imsi, m_cellId, m_rnti);
+            }
+
       break;
 
     default:

@@ -17,6 +17,8 @@
  *
  * Author: Giuseppe Piro  <g.piro@poliba.it>
  *         Marco Miozzo <mmiozzo@cttc.es>
+ * Modified by: Samuele Foni <samuele.foni@stud.unifi.it> (NB-IOT)
+ *
  */
 
 #include <ns3/object-factory.h>
@@ -161,7 +163,10 @@ LteEnbPhy::LteEnbPhy (Ptr<LteSpectrumPhy> dlPhy, Ptr<LteSpectrumPhy> ulPhy)
     m_srsPeriodicity (0),
     m_srsStartTime (Seconds (0)),
     m_currentSrsOffset (0),
-    m_interferenceSampleCounter (0)
+    m_interferenceSampleCounter (0),
+    m_mibNbPartCounter(0), // Used by NB-IoT standard to trace the current MIB-NB part.
+    m_schedulingInfoSib1NbGenerator(0),  // Used by NB-IoT standard to generate properly the SIB1-NB scheduling info.
+    m_sib1NbRepetitions(0)  // Used by NB-IoT to trace the number of repetitions of SIB1-NB.
 {
   m_enbPhySapProvider = new EnbMemberLteEnbPhySapProvider (this);
   m_enbCphySapProvider = new MemberLteEnbCphySapProvider<LteEnbPhy> (this);
@@ -289,6 +294,18 @@ LteEnbPhy::DoInitialize ()
   LtePhy::DoInitialize ();
 }
 
+
+/*
+ * \todo
+ *
+ * Implementation of the EnableNbIoTMode method needed to enable the NB-IoT mode.
+ * It is a temporary solution. To get more information about
+ * see the declaration of the method.
+ */
+void
+LteEnbPhy::EnableNbIotMode(){
+  m_EnabledNbIot = true;
+}
 
 void
 LteEnbPhy::SetLteEnbPhySapUser (LteEnbPhySapUser* s)
@@ -601,13 +618,141 @@ LteEnbPhy::StartFrame (void)
   NS_LOG_INFO ("-----frame " << m_nrFrames << "-----");
   m_nrSubFrames = 0;
 
-  // send MIB at beginning of every frame
-  m_mib.systemFrameNumber = m_nrSubFrames;
-  Ptr<MibLteControlMessage> mibMsg = Create<MibLteControlMessage> ();
-  mibMsg->SetMib (m_mib);
-  m_controlMessagesQueue.at (0).push_back (mibMsg);
+  if(m_EnabledNbIot==false) // Legacy LTE condition
+    {
+      // send MIB at beginning of every frame
+      m_mib.systemFrameNumber = m_nrSubFrames;
+      Ptr<MibLteControlMessage> mibMsg = Create<MibLteControlMessage> ();
+      mibMsg->SetMib (m_mib);
+      m_controlMessagesQueue.at (0).push_back (mibMsg);
 
+    }
+  else  // NB-IoT condition (enabled)
+    {
+      // send MIB-NB message part or a new one if it is the correct turn in the scheduling.
+
+
+      // NOTE: The Subframes number is 0, so we have to control the Frame number only.
+      if((m_nrFrames % 64) == 0)
+        {
+          // Send a new MIB-NB message
+
+          // This is first part of the new MIB-NB message, so we have to initialize the counter again.
+          m_mibNbPartCounter = 0;
+
+
+          // Initialize the generator of the schedulingInfoSib1Generator.
+          m_schedulingInfoSib1NbGenerator++;
+          m_schedulingInfoSib1NbGenerator = (m_schedulingInfoSib1NbGenerator) % 12;
+
+
+          /*
+           * This is a simplification of the information present in the Most Significant Byte
+           * of the System Frame Number. A single MIB-NB is divided into 8 parts. Each part has
+           * to be sent at the beginning of every subframe. A MIB-NB message is transmitted 8 times
+           * before to change his value.
+           */
+          m_mibNb.systemFrameNumberMsb = m_mibNbPartCounter;
+
+
+        }
+      else
+        {
+          /*
+           * We must set properly the content of the subframe number zero on a radio frame that is
+           * under the MIB-NB period (SFN mod 64 != 0).
+           */
+
+          //Increment the counter of MIB-NB part.
+          m_mibNbPartCounter++;
+
+          if(m_mibNbPartCounter == 8)
+            {
+              //We must repeat the last MIB-NB message sent.
+              m_mibNbPartCounter = 0;
+
+              // This is the only thing we need to change.
+            }
+
+          m_mibNb.systemFrameNumberMsb = m_mibNbPartCounter;
+
+
+        }
+
+      // We suppose the UE will not wait for a System Information Block Type 14. So it is not needed to enable AB.
+      m_mibNb.abEnabled = false;
+
+
+     /*
+      * We suppose to use Inband Same PCI mode, cause it is equal to legacy LTE.
+      *
+      * \todo
+      * Till now, it is not present a method to gave some information about the
+      * CRS (Cell Specific Reference Signal).
+      * So, we will set up an insignificant value.
+      *
+      * Anyway, in future, if CRS will be passed to this module it will be used.
+      * Otherwise, we could substitute the OperationMode structure with an enumetation.
+      *
+      */
+     m_mibNb.operationMode.inbandSamePci.eutraCrsSequenceInfo = 1;
+
+
+     /*
+      * We generate the schedulingInfoSib1 in a controlled way from 0 to 11.
+      * Values from 12 to 15 are reserved.
+      *
+      * In future this assignment will vary.
+      *
+      * To get more information about this parameter see the document 36.213, Table 16.4.1.3-3.
+      */
+      m_mibNb.schedulingInfoSib1 = (m_schedulingInfoSib1NbGenerator + m_mibNbPartCounter) % 12;
+
+
+      /*
+       * Number of the radio frame. This is a simplification cause we have to load only the 2
+       * LSB of the system frame number.
+       */
+      m_mibNb.hyperSfnLsb = m_nrFrames;
+
+
+      Ptr<MibNbLteControlMessage> mibMsg = Create<MibNbLteControlMessage>();
+
+      mibMsg->SetMibNb(m_mibNb);
+
+      m_controlMessagesQueue.at (0).push_back (mibMsg);
+
+      if((m_nrFrames % 256) == 0) // Set a new SIB1-NB period
+        {
+          m_sib1NbPeriod=true;
+
+          switch(m_mibNb.schedulingInfoSib1)
+            {
+              case 0:
+              case 3:
+              case 6:
+              case 9:
+                m_sib1NbRepetitions = 4;
+                break;
+
+              case 1:
+              case 4:
+              case 7:
+              case 10:
+                m_sib1NbRepetitions = 8;
+                break;
+
+              default:
+                m_sib1NbRepetitions = 16;
+                break;
+            }
+        }
+
+    }
+
+  // Once MIB or MIB-NB are enqueued we can start the composition of an another subframe.
   StartSubFrame ();
+
 }
 
 
@@ -618,19 +763,64 @@ LteEnbPhy::StartSubFrame (void)
 
   ++m_nrSubFrames;
 
-  /*
-   * Send SIB1 at 6th subframe of every odd-numbered radio frame. This is
-   * equivalent with Section 5.2.1.2 of 3GPP TS 36.331, where it is specified
-   * "repetitions are scheduled in subframe #5 of all other radio frames for
-   * which SFN mod 2 = 0," except that 3GPP counts frames and subframes starting
-   * from 0, while ns-3 counts starting from 1.
-   */
-  if ((m_nrSubFrames == 6) && ((m_nrFrames % 2) == 1))
+  if(m_EnabledNbIot==false) //Legacy LTE condition
     {
-      Ptr<Sib1LteControlMessage> msg = Create<Sib1LteControlMessage> ();
-      msg->SetSib1 (m_sib1);
-      m_controlMessagesQueue.at (0).push_back (msg);
+      /*
+       * Send SIB1 at 6th subframe of every odd-numbered radio frame. This is
+       * equivalent with Section 5.2.1.2 of 3GPP TS 36.331, where it is specified
+       * "repetitions are scheduled in subframe #5 of all other radio frames for
+       * which SFN mod 2 = 0," except that 3GPP counts frames and subframes starting
+       * from 0, while ns-3 counts starting from 1.
+       */
+      if ((m_nrSubFrames == 6) && ((m_nrFrames % 2) == 1))
+        {
+          Ptr<Sib1LteControlMessage> msg = Create<Sib1LteControlMessage> ();
+          msg->SetSib1 (m_sib1);
+          m_controlMessagesQueue.at (0).push_back (msg);
+        }
     }
+  else  //NB-IoT enabled
+    {
+      /*
+       * Send SIB1-NB if needed.
+       * SIB1-NB is transmitted over the NPDSCH. Its has a period of 256 radio frames and is
+       * repeated 4, 8 or 16 times. The transport block size and the number of repetitions is
+       * indicated in the MIB-NB. 4, 8 or 16 repetitions are possible, and 4 transport block sizes
+       * of 208, 328, 440 and 680 bits are defined, according to the  systemInformationBlockType1
+       * sent by the MIB-NB. The radio frame on which the SIB1-NB starts is determined by the
+       * number of repetitions and the NCellID.
+       * The SIB1-NB is transmitted in subframe #4 of every other frame in max 16 continuous frames.
+       */
+      if((m_nrSubFrames == 4)&&(m_sib1NbPeriod==true)&&(m_sib1NbRepetitions>0))
+        {
+
+          m_sib1NbRepetitions--;
+
+          /*
+           * This is a simplification of the effective implementation.
+           * Because we have to send only a part of the System Radio Frame Number.
+           * To get this value constant under the repetition we used the sum of
+           * the Radio Frame Number and the remaining number of SIB1-NB repetitions.
+           */
+          m_sib1Nb.hyperSfnMsbR13 = m_nrFrames + m_sib1NbRepetitions;
+
+
+
+          //Send SIB1-NB.
+          Ptr<Sib1NbLteControlMessage> msg = Create<Sib1NbLteControlMessage> ();
+          msg->SetSib1Nb(m_sib1Nb);
+          m_controlMessagesQueue.at (0).push_back (msg);
+
+        }
+
+      //Set the end of the SIB1-NB period
+      if(m_sib1NbRepetitions == 0)
+        {
+          m_sib1NbPeriod = false;
+        }
+
+    }
+
 
   if (m_srsPeriodicity>0)
     { 
@@ -1118,6 +1308,19 @@ LteEnbPhy::DoSetSystemInformationBlockType1 (LteRrcSap::SystemInformationBlockTy
   m_sib1 = sib1;
 }
 
+void
+LteEnbPhy::DoSetMasterInformationBlockNb (NbLteRrcSap::MasterInformationBlockNb mibNb)	// Used by NB-IoT. 3GPP Release 13.
+{
+  NS_LOG_FUNCTION (this);
+  m_mibNb = mibNb;
+}
+
+void
+LteEnbPhy::DoSetSystemInformationBlockType1Nb (NbLteRrcSap::SystemInformationBlockType1Nb sib1Nb)  // Used by NB-IoT. 3GPP Release 13.
+{
+  NS_LOG_FUNCTION (this);
+  m_sib1Nb = sib1Nb;
+}
 
 void
 LteEnbPhy::SetHarqPhyModule (Ptr<LteHarqPhy> harq)
